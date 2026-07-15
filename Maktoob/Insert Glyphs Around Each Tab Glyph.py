@@ -68,7 +68,7 @@ def remapLayer(font, masterID, glyphName, connectsFromRight, connectsToLeft):
 class InsertGlyphsAroundEachTabGlyph(object):
 	def __init__(self):
 		state = Glyphs._insertGlyphsState
-		self.w = vanilla.FloatingWindow((340, 132), "Insert Around Each Glyph")
+		self.w = vanilla.FloatingWindow((340, 152), "Insert Around Each Glyph")
 
 		self.w.caption = vanilla.TextBox(
 			(15, 14, -15, 17),
@@ -89,14 +89,14 @@ class InsertGlyphsAroundEachTabGlyph(object):
 		self.w.position.set(state['position'])
 
 		self.w.runButton = vanilla.Button(
-			(-100, 67, -15, 22),
+			(-100, 96, -15, 22),
 			"Insert",
 			callback=self.insertCallback,
 		)
 		self.w.setDefaultButton(self.w.runButton)
 
 		self.w.status = vanilla.TextBox(
-			(15, 100, -15, 17),
+			(15, 128, -15, 17),
 			"",
 			sizeStyle="small",
 		)
