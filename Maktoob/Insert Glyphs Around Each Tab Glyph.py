@@ -12,6 +12,10 @@ import vanilla
 
 FORM_SUFFIXES = ('.init', '.medi', '.fina', '.isol')
 
+# Persists last-used values across runs within the same Glyphs session.
+if not hasattr(Glyphs, '_insertGlyphsState'):
+	Glyphs._insertGlyphsState = {'names': '', 'position': 1}
+
 
 def isGlyphLayer(layer):
 	if isinstance(layer, GSControlLayer):
@@ -63,6 +67,7 @@ def remapLayer(font, masterID, glyphName, connectsFromRight, connectsToLeft):
 
 class InsertGlyphsAroundEachTabGlyph(object):
 	def __init__(self):
+		state = Glyphs._insertGlyphsState
 		self.w = vanilla.FloatingWindow((340, 132), "Insert Around Each Glyph")
 
 		self.w.caption = vanilla.TextBox(
@@ -72,7 +77,7 @@ class InsertGlyphsAroundEachTabGlyph(object):
 		)
 		self.w.glyphNames = vanilla.EditText(
 			(15, 36, -15, 22),
-			"",
+			state['names'],
 			sizeStyle="small",
 		)
 		self.w.position = vanilla.RadioGroup(
@@ -81,7 +86,7 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			isVertical=False,
 			sizeStyle="small",
 		)
-		self.w.position.set(1)  # default to After
+		self.w.position.set(state['position'])
 
 		self.w.runButton = vanilla.Button(
 			(-100, 67, -15, 22),
@@ -135,10 +140,15 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			return
 
 		# Accept names separated by spaces and/or slashes, e.g. "alef beh" or "/alef/beh".
-		names = self.w.glyphNames.get().replace("/", " ").split()
+		rawInput = self.w.glyphNames.get()
+		names = rawInput.replace("/", " ").split()
 		if not names:
 			self.w.status.set("Type at least one glyph name.")
 			return
+
+		# Save state for next run.
+		Glyphs._insertGlyphsState['names'] = rawInput
+		Glyphs._insertGlyphsState['position'] = self.w.position.get()
 
 		# Validate first; abort on any unknown name so a typo can't insert a partial set.
 		notFound = [n for n in names if font.glyphs[n] is None]
