@@ -60,25 +60,36 @@ def joinsOnRight(name):
 
 
 def remapLayer(font, masterID, glyphName, connectsFromRight, connectsToLeft):
-	"""Return the layer for the correct contextual form, or None if unchanged."""
+	"""Return the layer for the correct contextual form, or None if already correct.
+
+	Falls back gracefully when the ideal form doesn't exist — e.g. a right-joining
+	letter (reh, alef) has no .init/.medi, so "should be .init" → .isol instead.
+	"""
 	base = glyphName
 	for s in FORM_SUFFIXES:
 		if glyphName.endswith(s):
 			base = glyphName[:-len(s)]
 			break
+
+	# Preference order: ideal form first, then best available alternatives.
 	if connectsFromRight and connectsToLeft:
-		suffix = '.medi'
+		preferred = ['.medi', '.fina', '.init', '.isol']
 	elif connectsFromRight:
-		suffix = '.fina'
+		# connects from right only → .fina; right-joining letters stop here
+		preferred = ['.fina', '.isol']
 	elif connectsToLeft:
-		suffix = '.init'
+		# connects to left only → .init; right-joining letters can't, so .isol
+		preferred = ['.init', '.isol']
 	else:
-		suffix = '.isol'
-	candidate = base + suffix
-	if candidate == glyphName:
-		return None
-	if font.glyphs[candidate]:
-		return font.glyphs[candidate].layers[masterID]
+		preferred = ['.isol', '.fina']
+
+	for suffix in preferred:
+		candidate = base + suffix
+		if font.glyphs[candidate]:
+			if candidate == glyphName:
+				return None  # already in the correct form
+			return font.glyphs[candidate].layers[masterID]
+
 	return None
 
 
