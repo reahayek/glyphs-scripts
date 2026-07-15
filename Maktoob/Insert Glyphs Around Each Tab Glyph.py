@@ -93,11 +93,21 @@ class InsertGlyphsAroundEachTabGlyph(object):
 		)
 		self.w.setDefaultButton(self.w.runButton)
 
+		self.w.undoButton = vanilla.Button(
+			(15, 96, 80, 22),
+			"↩ Undo",
+			callback=self.undoCallback,
+		)
+		self.w.undoButton.enable(False)
+
 		self.w.status = vanilla.TextBox(
 			(15, 128, -15, 17),
 			"",
 			sizeStyle="small",
 		)
+
+		self._prevLayers = None
+		self._prevTab    = None
 
 		self.w.open()
 		self.w.makeKey()
@@ -161,6 +171,12 @@ class InsertGlyphsAroundEachTabGlyph(object):
 		insertAfter  = posMode in (1, 2)
 
 		allLayers = list(tab.layers)
+
+		# Snapshot current state so Undo can restore it.
+		self._prevLayers = list(allLayers)
+		self._prevTab    = tab
+		self.w.undoButton.enable(True)
+
 		targets = self.targetIndices(tab, allLayers)
 		hadSelection = len(targets) < len(allLayers)
 
@@ -236,6 +252,14 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			)
 		else:
 			self.w.status.set("No glyphs to act on (only spaces or breaks).")
+
+	def undoCallback(self, sender):
+		if self._prevTab and self._prevLayers is not None:
+			self._prevTab.layers = self._prevLayers
+			self._prevLayers = None
+			self._prevTab    = None
+			self.w.undoButton.enable(False)
+			self.w.status.set("Undone.")
 
 
 InsertGlyphsAroundEachTabGlyph()
