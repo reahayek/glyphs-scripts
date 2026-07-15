@@ -10,9 +10,10 @@ separated by spaces or slashes.
 from GlyphsApp import *
 import vanilla
 
+FORM_SUFFIXES = ('.init', '.medi', '.fina', '.isol')
+
 
 def isGlyphLayer(layer):
-	# A line break is a GSControlLayer; a real glyph layer has a glyph parent.
 	if isinstance(layer, GSControlLayer):
 		return False
 	return getattr(layer, "parent", None) is not None
@@ -21,6 +22,43 @@ def isGlyphLayer(layer):
 def isSpaceLayer(layer):
 	glyph = layer.parent
 	return glyph.category == "Separator" or glyph.name == "space"
+
+
+def hasFormSuffix(name):
+	return any(name.endswith(s) for s in FORM_SUFFIXES)
+
+
+def joinsOnLeft(name):
+	"""Glyph connects on its LEFT side in RTL display (.init or .medi)."""
+	return name.endswith('.init') or name.endswith('.medi')
+
+
+def joinsOnRight(name):
+	"""Glyph connects on its RIGHT side in RTL display (.fina or .medi)."""
+	return name.endswith('.medi') or name.endswith('.fina')
+
+
+def remapLayer(font, masterID, glyphName, connectsFromRight, connectsToLeft):
+	"""Return the layer for the correct contextual form, or None if unchanged."""
+	base = glyphName
+	for s in FORM_SUFFIXES:
+		if glyphName.endswith(s):
+			base = glyphName[:-len(s)]
+			break
+	if connectsFromRight and connectsToLeft:
+		suffix = '.medi'
+	elif connectsFromRight:
+		suffix = '.fina'
+	elif connectsToLeft:
+		suffix = '.init'
+	else:
+		suffix = '.isol'
+	candidate = base + suffix
+	if candidate == glyphName:
+		return None
+	if font.glyphs[candidate]:
+		return font.glyphs[candidate].layers[masterID]
+	return None
 
 
 class InsertGlyphsAroundEachTabGlyph(object):
@@ -108,38 +146,78 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			self.w.status.set("Not in font: %s" % ", ".join(notFound))
 			return
 
+		masterID = font.selectedFontMaster.id
+		insertLayers = [font.glyphs[n].layers[masterID] for n in names]
 		insertBefore = self.w.position.get() == 0
-		insertText = "".join("/" + n for n in names)
 
 		allLayers = list(tab.layers)
 		targets = self.targetIndices(tab, allLayers)
 		hadSelection = len(targets) < len(allLayers)
 
-		# Build a text string instead of manipulating layers directly, so
-		# Glyphs' shaping engine re-renders contextual Arabic forms correctly.
-		originalDir = tab.direction
-		if originalDir == RTL:
-			tab.direction = LTR
-
-		parts = []
+		# Step 1: build the new layer list with insertions, tracking which
+		# layers are original (eligible for form remapping) vs inserted.
+		newLayers = []
+		origFlags = []
 		glyphCount = 0
+
 		for i, layer in enumerate(allLayers):
-			if not isGlyphLayer(layer):
-				parts.append("\n")
-				continue
-			glyphStr = "/" + layer.parent.name
-			wrapThis = (i in targets) and not isSpaceLayer(layer)
+			wrapThis = (i in targets) and isGlyphLayer(layer) and not isSpaceLayer(layer)
 			if wrapThis:
 				if insertBefore:
-					parts.append(insertText + glyphStr)
+					for il in insertLayers:
+						newLayers.append(il)
+						origFlags.append(False)
+					newLayers.append(layer)
+					origFlags.append(True)
 				else:
-					parts.append(glyphStr + insertText)
+					newLayers.append(layer)
+					origFlags.append(True)
+					for il in insertLayers:
+						newLayers.append(il)
+						origFlags.append(False)
 				glyphCount += 1
 			else:
-				parts.append(glyphStr)
+				newLayers.append(layer)
+				origFlags.append(True)
 
-		tab.text = "".join(parts)
-		tab.direction = originalDir
+		# Step 2: remap original glyphs that have form suffixes based on their
+		# actual neighbors in the new sequence. Lower array index = more to
+		# the RIGHT in RTL display, so:
+		#   right neighbor = lower index  → does it join on its LEFT?
+		#   left  neighbor = higher index → does it join on its RIGHT?
+		def findNeighborName(seq, start, direction):
+			"""Walk in direction (+1 or -1) and return first joining glyph name,
+			or None if a line-break or space is hit first."""
+			k = start + direction
+			while 0 <= k < len(seq):
+				lyr = seq[k]
+				if not isGlyphLayer(lyr):
+					return None  # line break: chain broken
+				if isSpaceLayer(lyr):
+					return None  # space: chain broken
+				name = lyr.parent.name
+				if hasFormSuffix(name):
+					return name
+				return None  # non-form glyph: chain broken
+			return None
+
+		finalLayers = []
+		for j, (layer, isOrig) in enumerate(zip(newLayers, origFlags)):
+			if not isOrig or not isGlyphLayer(layer) or isSpaceLayer(layer):
+				finalLayers.append(layer)
+				continue
+			name = layer.parent.name
+			if not hasFormSuffix(name):
+				finalLayers.append(layer)
+				continue
+			rightName = findNeighborName(newLayers, j, -1)  # lower index = right
+			leftName  = findNeighborName(newLayers, j, +1)  # higher index = left
+			connectsFromRight = joinsOnLeft(rightName)  if rightName else False
+			connectsToLeft    = joinsOnRight(leftName)  if leftName  else False
+			remapped = remapLayer(font, masterID, name, connectsFromRight, connectsToLeft)
+			finalLayers.append(remapped if remapped else layer)
+
+		tab.layers = finalLayers
 
 		if glyphCount:
 			scope = "selected" if hadSelection else "all"
