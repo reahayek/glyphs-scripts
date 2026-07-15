@@ -108,30 +108,38 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			self.w.status.set("Not in font: %s" % ", ".join(notFound))
 			return
 
-		masterID = font.selectedFontMaster.id
-		insertLayers = [font.glyphs[n].layers[masterID] for n in names]
 		insertBefore = self.w.position.get() == 0
+		insertText = "".join("/" + n for n in names)
 
 		allLayers = list(tab.layers)
 		targets = self.targetIndices(tab, allLayers)
 		hadSelection = len(targets) < len(allLayers)
 
-		newLayers = []
+		# Build a text string instead of manipulating layers directly, so
+		# Glyphs' shaping engine re-renders contextual Arabic forms correctly.
+		originalDir = tab.direction
+		if originalDir == RTL:
+			tab.direction = LTR
+
+		parts = []
 		glyphCount = 0
 		for i, layer in enumerate(allLayers):
-			wrapThis = (i in targets) and isGlyphLayer(layer) and not isSpaceLayer(layer)
+			if not isGlyphLayer(layer):
+				parts.append("\n")
+				continue
+			glyphStr = "/" + layer.parent.name
+			wrapThis = (i in targets) and not isSpaceLayer(layer)
 			if wrapThis:
 				if insertBefore:
-					newLayers.extend(insertLayers)
-					newLayers.append(layer)
+					parts.append(insertText + glyphStr)
 				else:
-					newLayers.append(layer)
-					newLayers.extend(insertLayers)
+					parts.append(glyphStr + insertText)
 				glyphCount += 1
 			else:
-				newLayers.append(layer)
+				parts.append(glyphStr)
 
-		tab.layers = newLayers
+		tab.text = "".join(parts)
+		tab.direction = originalDir
 
 		if glyphCount:
 			scope = "selected" if hadSelection else "all"

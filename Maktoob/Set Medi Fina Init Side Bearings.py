@@ -52,37 +52,56 @@ else:
 		finaCount = 0
 		initCount = 0
 
-		for glyph in selectedGlyphs:
-			name = glyph.name or ""
+		refGlyph = font.glyphs[REFERENCE]
 
-			if name == REFERENCE:
-				continue
+		font.disableUpdateInterface()
+		try:
+			for glyph in selectedGlyphs:
+				name = glyph.name or ""
 
-			isMedi = name.endswith(".medi")
-			isFina = name.endswith(".fina")
-			isInit = name.endswith(".init")
+				if name == REFERENCE:
+					continue
 
-			if not isMedi and not isFina and not isInit:
-				continue
+				isMedi = name.endswith(".medi")
+				isFina = name.endswith(".fina")
+				isInit = name.endswith(".init")
 
-			glyph.beginUndo()
-			try:
-				if isMedi:
-					glyph.leftMetricsKey  = METRICS_KEY
-					glyph.rightMetricsKey = METRICS_KEY
-					mediCount += 1
-				elif isFina:
-					glyph.rightMetricsKey = METRICS_KEY
-					finaCount += 1
-				elif isInit:
-					glyph.leftMetricsKey = METRICS_KEY
-					initCount += 1
+				if not isMedi and not isFina and not isInit:
+					continue
 
-				# Sync spacing values immediately across all masters
-				for layer in glyph.layers:
-					layer.syncMetrics()
-			finally:
-				glyph.endUndo()
+				glyph.beginUndo()
+				try:
+					if isMedi:
+						glyph.leftMetricsKey  = METRICS_KEY
+						glyph.rightMetricsKey = METRICS_KEY
+						mediCount += 1
+					elif isFina:
+						glyph.rightMetricsKey = METRICS_KEY
+						finaCount += 1
+					elif isInit:
+						glyph.leftMetricsKey = METRICS_KEY
+						initCount += 1
+
+					# Directly copy spacing values from the reference layer
+					# per master so the edit view updates immediately.
+					for master in font.masters:
+						refLayer = refGlyph.layers[master.id]
+						targetLayer = glyph.layers[master.id]
+						if not refLayer or not targetLayer:
+							continue
+						if isMedi:
+							targetLayer.LSB = refLayer.LSB
+							targetLayer.RSB = refLayer.RSB
+						elif isFina:
+							targetLayer.RSB = refLayer.RSB
+						elif isInit:
+							targetLayer.LSB = refLayer.LSB
+				finally:
+					glyph.endUndo()
+		finally:
+			font.enableUpdateInterface()
+
+		Glyphs.redraw()
 
 		print("Done.")
 		print("  .medi glyphs updated: %d (LSB + RSB → %s)" % (mediCount, REFERENCE))
