@@ -81,8 +81,8 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			sizeStyle="small",
 		)
 		self.w.position = vanilla.RadioGroup(
-			(15, 68, 170, 20),
-			["Before", "After"],
+			(15, 68, -15, 20),
+			["Before", "After", "Both"],
 			isVertical=False,
 			sizeStyle="small",
 		)
@@ -158,7 +158,9 @@ class InsertGlyphsAroundEachTabGlyph(object):
 
 		masterID = font.selectedFontMaster.id
 		insertLayers = [font.glyphs[n].layers[masterID] for n in names]
-		insertBefore = self.w.position.get() == 0
+		posMode = self.w.position.get()  # 0=Before, 1=After, 2=Both
+		insertBefore = posMode in (0, 2)
+		insertAfter  = posMode in (1, 2)
 
 		allLayers = list(tab.layers)
 		targets = self.targetIndices(tab, allLayers)
@@ -177,11 +179,9 @@ class InsertGlyphsAroundEachTabGlyph(object):
 					for il in insertLayers:
 						newLayers.append(il)
 						origFlags.append(False)
-					newLayers.append(layer)
-					origFlags.append(True)
-				else:
-					newLayers.append(layer)
-					origFlags.append(True)
+				newLayers.append(layer)
+				origFlags.append(True)
+				if insertAfter:
 					for il in insertLayers:
 						newLayers.append(il)
 						origFlags.append(False)
@@ -231,9 +231,10 @@ class InsertGlyphsAroundEachTabGlyph(object):
 
 		if glyphCount:
 			scope = "selected" if hadSelection else "all"
+			pos = ("before and after" if posMode == 2 else "before" if posMode == 0 else "after")
 			self.w.status.set(
 				"Added %s %i %s glyph%s; spaces and breaks kept."
-				% ("before" if insertBefore else "after", glyphCount, scope, "" if glyphCount == 1 else "s")
+				% (pos, glyphCount, scope, "" if glyphCount == 1 else "s")
 			)
 		else:
 			self.w.status.set("No glyphs to act on (only spaces or breaks).")
