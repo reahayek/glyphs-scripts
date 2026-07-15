@@ -12,8 +12,26 @@ import vanilla
 
 FORM_SUFFIXES = ('.init', '.medi', '.fina', '.isol')
 
-PREF_NAMES    = 'com.maktoob.insertGlyphs.names'
-PREF_POSITION = 'com.maktoob.insertGlyphs.position'
+import sys, types
+
+# State lives on a fake module in sys.modules so it:
+#   - persists between script runs within the same Glyphs session
+#   - resets automatically when Glyphs quits (Python interpreter restarts)
+_STORE_KEY = '__maktoob_insert_state__'
+if _STORE_KEY not in sys.modules:
+	_s = types.ModuleType(_STORE_KEY)
+	_s.names    = ''
+	_s.position = 1
+	_s.fontPath = None
+	sys.modules[_STORE_KEY] = _s
+_state = sys.modules[_STORE_KEY]
+
+# Reset if the user switched to a different font file.
+_currentPath = Glyphs.font.filepath if Glyphs.font else None
+if _currentPath != _state.fontPath:
+	_state.names    = ''
+	_state.position = 1
+	_state.fontPath = _currentPath
 
 
 def isGlyphLayer(layer):
@@ -75,7 +93,7 @@ class InsertGlyphsAroundEachTabGlyph(object):
 		)
 		self.w.glyphNames = vanilla.EditText(
 			(15, 36, -15, 22),
-			Glyphs.defaults[PREF_NAMES] or '',
+			_state.names,
 			sizeStyle="small",
 		)
 		self.w.position = vanilla.RadioGroup(
@@ -84,7 +102,7 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			isVertical=False,
 			sizeStyle="small",
 		)
-		self.w.position.set(Glyphs.defaults[PREF_POSITION] or 1)
+		self.w.position.set(_state.position)
 
 		self.w.runButton = vanilla.Button(
 			(-100, 96, -15, 22),
@@ -155,8 +173,8 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			return
 
 		# Save state for next run.
-		Glyphs.defaults[PREF_NAMES]    = rawInput
-		Glyphs.defaults[PREF_POSITION] = self.w.position.get()
+		_state.names    = rawInput
+		_state.position = self.w.position.get()
 
 		# Validate first; abort on any unknown name so a typo can't insert a partial set.
 		notFound = [n for n in names if font.glyphs[n] is None]
