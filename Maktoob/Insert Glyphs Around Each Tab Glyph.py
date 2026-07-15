@@ -12,9 +12,8 @@ import vanilla
 
 FORM_SUFFIXES = ('.init', '.medi', '.fina', '.isol')
 
-# Persists last-used values across runs within the same Glyphs session.
-if not hasattr(Glyphs, '_insertGlyphsState'):
-	Glyphs._insertGlyphsState = {'names': '', 'position': 1}
+PREF_NAMES    = 'com.maktoob.insertGlyphs.names'
+PREF_POSITION = 'com.maktoob.insertGlyphs.position'
 
 
 def isGlyphLayer(layer):
@@ -67,7 +66,6 @@ def remapLayer(font, masterID, glyphName, connectsFromRight, connectsToLeft):
 
 class InsertGlyphsAroundEachTabGlyph(object):
 	def __init__(self):
-		state = Glyphs._insertGlyphsState
 		self.w = vanilla.FloatingWindow((340, 152), "Insert Around Each Glyph")
 
 		self.w.caption = vanilla.TextBox(
@@ -77,7 +75,7 @@ class InsertGlyphsAroundEachTabGlyph(object):
 		)
 		self.w.glyphNames = vanilla.EditText(
 			(15, 36, -15, 22),
-			state['names'],
+			Glyphs.defaults[PREF_NAMES] or '',
 			sizeStyle="small",
 		)
 		self.w.position = vanilla.RadioGroup(
@@ -86,7 +84,7 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			isVertical=False,
 			sizeStyle="small",
 		)
-		self.w.position.set(state['position'])
+		self.w.position.set(Glyphs.defaults[PREF_POSITION] or 1)
 
 		self.w.runButton = vanilla.Button(
 			(-100, 96, -15, 22),
@@ -147,8 +145,8 @@ class InsertGlyphsAroundEachTabGlyph(object):
 			return
 
 		# Save state for next run.
-		Glyphs._insertGlyphsState['names'] = rawInput
-		Glyphs._insertGlyphsState['position'] = self.w.position.get()
+		Glyphs.defaults[PREF_NAMES]    = rawInput
+		Glyphs.defaults[PREF_POSITION] = self.w.position.get()
 
 		# Validate first; abort on any unknown name so a typo can't insert a partial set.
 		notFound = [n for n in names if font.glyphs[n] is None]
